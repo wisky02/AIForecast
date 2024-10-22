@@ -6,7 +6,7 @@
 
 # %%
 h_lim = 168 #hours forecasting window
-input_folder =r'./input_data/'
+input_folder = r'../Competition Data\Data/1 - Savanna Preserve/'#r'./input_data/'
 api_key = 'nixak-2LCbrvDu8uh6uONR7nnoU8L8i0B0ZR2UOpdNfiBnZs4S5vdFe73JXyDGz7r15mABHL5H7Xvmva2oCbXd' # your api 
 
 # --- Analysis Options --- # 
