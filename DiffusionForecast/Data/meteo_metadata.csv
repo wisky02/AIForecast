@@ -1,0 +1,6 @@
+﻿Variable;Valid time;Unit;Description
+temperature_2m;Instant;°C;Air temperature at 2 meters above ground
+relative_humidity_2m;Instant;%;Relative humidity at 2 meters above ground
+global_tilted_irradiance;Preceding hour mean;W/m²;Total radiation received on a tilted pane as average of the preceding hour. The calculation is assuming a fixed albedo of 20% and in isotropic sky. Tilt and azimuth parameters are set to 0°.
+precipitation;Preceding hour sum;mm;Total precipitation (rain, showers, snow) sum of the preceding hour
+us_aqi;Instant;U.S. AQI;United States Air Quality Index (AQI) calculated for different particulate matter and gases individually. The consolidated us_aqi returns the maximum of all individual indices. Ranges from 0-50 (good), 51-100 (moderate), 101-150 (unhealthy for sensitive groups), 151-200 (unhealthy), 201-300 (very unhealthy) and 301-500 (hazardous).
