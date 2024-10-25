@@ -1,18 +1,32 @@
+from DiffusionStuff.imputers.SSSDS4Imputer import SSSDS4Imputer
+import os 
+import torch 
+import torch.nn as nn
+import torch.nn.functional as F
+from DiffusionStuff.utils.util import find_max_epoch, print_size, sampling, calc_diffusion_hyperparams, get_mask_bm_forecasting, create_3d_array_rollingwindow, find_max_epoch, print_size, calc_diffusion_hyperparams, training_loss_replace
+from sklearn.metrics import mean_squared_error 
+
+import numpy as np 
+
+
 def generate(output_directory,
-             num_samples,
-             ckpt_path,
-             data_path,
-             ckpt_iter,
-             use_model,
-             missing_k,
-             only_generate_missing,
-             iter_num,
-             path, 
-             forecast_window, 
-             forecast_cols, 
-             dummy_columns_for_forecast_window,
-             gpu_number
-             ):
+            num_samples,
+            ckpt_path,
+            data_path,
+            ckpt_iter,
+            use_model,
+            missing_k,
+            only_generate_missing,
+            iter_num,
+            path, 
+            forecast_window, 
+            forecast_cols, 
+            dummy_columns_for_forecast_window,
+            gpu_number,
+            diffusion_config,
+            diffusion_hyperparams,
+            model_config
+            ):
     """
     Generate data based on ground truth
 
@@ -45,9 +59,9 @@ def generate(output_directory,
     # map diffusion hyperparameters to gpu
     for key in diffusion_hyperparams:
         if key != "T":
-            diffusion_hyperparams[key] = diffusion_hyperparams[key].cuda()
+            diffusion_hyperparams[key] = diffusion_hyperparams[key].cuda(gpu_number)
 
-    net = SSSDS4Imputer(**model_config).cuda()
+    net = SSSDS4Imputer(**model_config).cuda(gpu_number)
 
     # load checkpoint
     ckpt_path = os.path.join(ckpt_path, local_path)
@@ -73,7 +87,7 @@ def generate(output_directory,
     # testing_data = test_scaled.copy()
     testing_data = np.array(testing_data)
     print(testing_data.shape)
-    testing_data = torch.from_numpy(testing_data).float().cuda()
+    testing_data = torch.from_numpy(testing_data).float().cuda(gpu_number)
     print(testing_data.shape)
     all_mse = []
 
@@ -93,7 +107,7 @@ def generate(output_directory,
         
         
         mask = transposed_mask.permute(1, 0)
-        mask = mask.repeat(batch.size()[0], 1, 1).float().cuda()
+        mask = mask.repeat(batch.size()[0], 1, 1).float().cuda(gpu_number)
         
         
         
@@ -192,7 +206,12 @@ def training(output_directory,
           forecast_window, # points to forecast
           forecast_cols, # idx of columns we want to forecast - defauly [0,1] 
           dummy_columns_for_forecast_window, # idx of conditional cols, hidden during forecast - i.e day of week CAN be seen - sets to zero
-          gpu_number
+          train_scaled,
+          gpu_number,
+          trainset_config,
+          diffusion_config,
+          diffusion_hyperparams,
+          model_config,
           ):
 
     """
@@ -218,10 +237,10 @@ def training(output_directory,
     # map diffusion hyperparameters to gpu
     for key in diffusion_hyperparams:
         if key != "T":
-            diffusion_hyperparams[key] = diffusion_hyperparams[key].cuda()
+            diffusion_hyperparams[key] = diffusion_hyperparams[key].cuda(gpu_number)
 
 
-    net = SSSDS4Imputer(**model_config).cuda()
+    net = SSSDS4Imputer(**model_config).cuda(gpu_number)
     optimizer = torch.optim.AdamW(net.parameters(), lr=learning_rate)
 
     # load checkpoint
@@ -253,7 +272,7 @@ def training(output_directory,
     
     training_data = np.array(training_data)
     print(training_data.shape)
-    training_data = torch.from_numpy(training_data).float().cuda()
+    training_data = torch.from_numpy(training_data).float().cuda(gpu_number)
     print('Data loaded')
 
     
@@ -275,7 +294,7 @@ def training(output_directory,
 
                 # Repeating mask over each sample
                 mask = transposed_mask.permute(1, 0)
-                mask = mask.repeat(batch.size()[0], 1, 1).float().cuda()
+                mask = mask.repeat(batch.size()[0], 1, 1).float().cuda(gpu_number)
                 
                 # Invert mask for loss function calculation
                 loss_mask = ~mask.bool()

@@ -48,6 +48,13 @@ dataset = r"1 - Savanna Preserve"
 # dataset = "2 - Clean Urban Air"
 # dataset = "3 - Resilient Fields"
 
+# Use get_least_utilized_gpu or get_least_memory_utilized_gpu to auto launch on the optimum GPU, if auto_select = False, default_GPU is set
+auto_select_GPU_options = {'auto_select': True, # if True finds least utilised GPU in terms of utilisation or memory
+                           'compute_or_memory':'memory', # 'compute' or 'memory' to set deciscion method
+                           'default_GPU':3,
+                           'avoid_GPU':0 # [int] static option to avoid certain GPUs - -1 for no avoids 
+                           }
+
 
 #===========================================
 # Imports 
@@ -75,6 +82,7 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 import sys
 
+
 from DiffusionStuff.utils.util import find_max_epoch, print_size, sampling, calc_diffusion_hyperparams
 from DiffusionStuff.utils.util import find_max_epoch, print_size, calc_diffusion_hyperparams, training_loss_replace
 from DiffusionStuff.utils.util import get_mask_bm_forecasting, create_3d_array_rollingwindow
@@ -84,6 +92,14 @@ import json
 from DiffusionStuff.imputers.SSSDS4Imputer import SSSDS4Imputer
 from sklearn.metrics import mean_squared_error 
 from statistics import mean
+
+# --- Training & Eval Funcs --- #  
+from CallScripts import DiffusionFuncs as DF
+
+# --- Optimiser Funcs --- # 
+from CallScripts import OptimiserFuncs as optim
+
+
 
 #===========================================
 # Functions
@@ -134,6 +150,12 @@ elif(dataset == "2 - Clean Urban Air"):
     y_test = pd.read_csv("Data/" + dataset + "/2_y_test.csv")
 else:
     y_test = pd.read_csv("Data/" + dataset + "/3_y_test.csv")
+
+# ---- Autosetting GPU ---- # 
+# Setting the optimum GPU 
+GPU_number, GPU_utilisation = optim.auto_set_GPU(auto_select_GPU_options)
+print(f'\nAutoset GPU: {GPU_number}')
+print(f'{GPU_number=}')
 
 
 # Dataframe Cleaning: training data
@@ -191,21 +213,22 @@ with open("DiffusionStuff/configs/conditionalForecastV2.json") as f:
 
 config = json.loads(data)
 
-global train_config
+# global train_config
 train_config = config["train_config"]  # training parameters
 
 gen_config = config['gen_config']
 
-global trainset_config
+# global trainset_config
 trainset_config = config["trainset_config"]  # to load trainset
 
-global diffusion_config
+# global diffusion_config
 diffusion_config = config["diffusion_config"]  # basic hyperparameters
+print(diffusion_config)
 
-global diffusion_hyperparams
+# global diffusion_hyperparams
 diffusion_hyperparams = calc_diffusion_hyperparams(**diffusion_config)  # dictionary of all diffusion hyperparameters
 
-global model_config
+# global model_config
 if train_config['use_model'] == 0:
     model_config = config['wavenet_config']
 elif train_config['use_model'] == 1:
@@ -215,4 +238,11 @@ elif train_config['use_model'] == 2:
     
 print(model_config)
 
-training(**train_config)
+DF.training(**train_config, 
+            train_scaled = train_scaled,
+            gpu_number=GPU_number,
+            trainset_config = trainset_config,
+            diffusion_config=diffusion_config, 
+            diffusion_hyperparams= diffusion_hyperparams,
+            model_config = model_config
+            )
