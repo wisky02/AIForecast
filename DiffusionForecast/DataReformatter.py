@@ -8,7 +8,7 @@ Reformatter for the API call into the standard data format for the competition
 # User Settings 
 #==========================================
 
-data_path = r'/home/ldickson/AIForecast/Competition Data/Data/openmeteo_last10years.csv' #AQ_varaibles_2yrs.csv
+data_path = r'../openmeteo_last10years_savannah.csv' #AQ_varaibles_2yrs.csv
 
 #==========================================
 # Imports 
