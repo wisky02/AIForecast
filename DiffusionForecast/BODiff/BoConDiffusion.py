@@ -157,7 +157,6 @@ GPU_number, GPU_utilisation = optim.auto_set_GPU(auto_select_GPU_options)
 print(f'\nAutoset GPU: {GPU_number}')
 print(f'{GPU_number=}')
 
-
 # Dataframe Cleaning: training data
 X_train = X_train.drop(columns=['Unnamed: 0', 'location_id'])
 X_train["date"] = pd.to_datetime(X_train["date"])
@@ -235,7 +234,7 @@ elif train_config['use_model'] == 1:
     model_config = config['sashimi_config']
 elif train_config['use_model'] == 2:
     model_config = config['wavenet_config'] 
-    
+
 print(model_config)
 
 DF.training(**train_config, 

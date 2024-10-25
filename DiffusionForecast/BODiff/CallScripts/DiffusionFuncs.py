@@ -3,7 +3,7 @@ import os
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F
-from DiffusionStuff.utils.util import find_max_epoch, print_size, sampling, calc_diffusion_hyperparams, get_mask_bm_forecasting, create_3d_array_rollingwindow, find_max_epoch, print_size, calc_diffusion_hyperparams, training_loss_replace
+import DiffusionStuff.utils.util as ut
 from sklearn.metrics import mean_squared_error 
 
 import numpy as np 
@@ -66,7 +66,7 @@ def generate(output_directory,
     # load checkpoint
     ckpt_path = os.path.join(ckpt_path, local_path)
     if ckpt_iter == 'max':
-        ckpt_iter = find_max_epoch(ckpt_path)
+        ckpt_iter = ut.find_max_epoch(ckpt_path)
         ckpt_iter = iter_num
     model_path = os.path.join(path, '{}.pkl'.format(ckpt_iter))
 
@@ -97,7 +97,7 @@ def generate(output_directory,
 
 
         batch = batch.to(f'cuda:{gpu_number}').float()
-        transposed_mask = get_mask_bm_forecasting(batch[0,:,:], forecast_window, forecast_cols)
+        transposed_mask = ut.get_mask_bm_forecasting(batch[0,:,:], forecast_window, forecast_cols)
         
 
         for col in dummy_columns_for_forecast_window:
@@ -130,11 +130,13 @@ def generate(output_directory,
         
         sample_length = batch.size(2)
         sample_channels = batch.size(1)
-        generated_audio = sampling(net, (num_samples, sample_channels, sample_length),
+        generated_audio = ut.sampling(net, (num_samples, sample_channels, sample_length),
                                    diffusion_hyperparams,
                                    cond=batch,
                                    mask=mask,
-                                   only_generate_missing=only_generate_missing)
+                                   GPU_number = gpu_number,
+                                   only_generate_missing=only_generate_missing,
+                                   )
 
         end.record()
         torch.cuda.synchronize()
@@ -245,7 +247,7 @@ def training(output_directory,
 
     # load checkpoint
     if ckpt_iter == 'max':
-        ckpt_iter = find_max_epoch(output_directory)
+        ckpt_iter = ut.find_max_epoch(output_directory)
     if ckpt_iter >= 0:
         try:
             # load checkpoint file
@@ -285,7 +287,7 @@ def training(output_directory,
                 
                 #have one mask for generation and one mask for loss so we optimise on the correct data but dont leak answers to the model
                 batch = batch.to(f'cuda:{gpu_number}').float()
-                transposed_mask = get_mask_bm_forecasting(batch[0,:,:], forecast_window, forecast_cols)
+                transposed_mask = ut.get_mask_bm_forecasting(batch[0,:,:], forecast_window, forecast_cols)
                 
    
                 # Replacing conditionals with dummy values to block forecasting on conditionals
@@ -306,8 +308,12 @@ def training(output_directory,
                 # back-propagation
                 optimizer.zero_grad()
                 X = batch, batch, mask, loss_mask
-                loss = training_loss_replace(net, nn.MSELoss(), X, diffusion_hyperparams,
-                                    only_generate_missing=only_generate_missing)
+                loss = ut.training_loss_replace(net, 
+                                                nn.MSELoss(), 
+                                                X, 
+                                                diffusion_hyperparams,
+                                                GPU_number = gpu_number,
+                                                only_generate_missing=only_generate_missing)
                 
                 loss.backward()
                 optimizer.step()

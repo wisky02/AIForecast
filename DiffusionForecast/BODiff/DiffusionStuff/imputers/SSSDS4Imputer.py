@@ -160,7 +160,8 @@ class SSSDS4Imputer(nn.Module):
                  s4_d_state,
                  s4_dropout,
                  s4_bidirectional,
-                 s4_layernorm):
+                 s4_layernorm
+                 ):
         super(SSSDS4Imputer, self).__init__()
 
         self.init_conv = nn.Sequential(Conv(in_channels, res_channels, kernel_size=1), nn.ReLU())
