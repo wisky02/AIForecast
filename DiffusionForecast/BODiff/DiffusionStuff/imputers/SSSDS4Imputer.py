@@ -114,8 +114,11 @@ class Residual_group(nn.Module):
                  s4_d_state,
                  s4_dropout,
                  s4_bidirectional,
-                 s4_layernorm):
+                 s4_layernorm,
+                 GPU_number
+                 ):
         super(Residual_group, self).__init__()
+        self.GPU_number = GPU_number
         self.num_res_layers = num_res_layers
         self.diffusion_step_embed_dim_in = diffusion_step_embed_dim_in
 
@@ -137,7 +140,7 @@ class Residual_group(nn.Module):
     def forward(self, input_data):
         noise, conditional, diffusion_steps = input_data
 
-        diffusion_step_embed = calc_diffusion_step_embedding(diffusion_steps, self.diffusion_step_embed_dim_in)
+        diffusion_step_embed = calc_diffusion_step_embedding(diffusion_steps, self.diffusion_step_embed_dim_in, self.GPU_number)
         diffusion_step_embed = swish(self.fc_t1(diffusion_step_embed))
         diffusion_step_embed = swish(self.fc_t2(diffusion_step_embed))
 
@@ -160,7 +163,8 @@ class SSSDS4Imputer(nn.Module):
                  s4_d_state,
                  s4_dropout,
                  s4_bidirectional,
-                 s4_layernorm
+                 s4_layernorm,
+                 GPU_number
                  ):
         super(SSSDS4Imputer, self).__init__()
 
@@ -177,7 +181,9 @@ class SSSDS4Imputer(nn.Module):
                                              s4_d_state=s4_d_state,
                                              s4_dropout=s4_dropout,
                                              s4_bidirectional=s4_bidirectional,
-                                             s4_layernorm=s4_layernorm)
+                                             s4_layernorm=s4_layernorm,
+                                             GPU_number=GPU_number
+                                             )
         
         self.final_conv = nn.Sequential(Conv(skip_channels, skip_channels, kernel_size=1),
                                         nn.ReLU(),

@@ -242,7 +242,7 @@ def training(output_directory,
             diffusion_hyperparams[key] = diffusion_hyperparams[key].cuda(gpu_number)
 
 
-    net = SSSDS4Imputer(**model_config).cuda(gpu_number)
+    net = SSSDS4Imputer(**model_config, GPU_number = gpu_number).cuda(gpu_number)
     optimizer = torch.optim.AdamW(net.parameters(), lr=learning_rate)
 
     # load checkpoint
