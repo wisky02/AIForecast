@@ -255,6 +255,15 @@ merged_train = pd.merge(y_train, X_train, on='date', how='inner')
 merged_test = pd.merge(y_test, X_test, on='date', how='inner')
 merged_all = pd.concat([merged_train, merged_test], axis=0)
 
+#------------------------------------------
+# Creating/loading the optimisation tracker
+#------------------------------------------
+
+shot_info_dict = SF.load_logfile(experiment_csv_path) # loading sheet with experimental parameters and the corresponding shot numbers
+shot_dF = SF.df_from_shotlist(experiment_csv_path)
+print('Warning - incorrect dF cropping - make sure to select shots with matching parameters e.g dopant concentration')
+reduce_names = var_names + requested_e_params
+shot_dF = SF.reduce_dF_matchstr(shot_dF, reduce_names, matchstr_header)
 
 
 # ---- Autosetting GPU ---- # 
