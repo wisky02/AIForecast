@@ -1,0 +1,19 @@
+# Created on 15/10/2021 by Lewis Dickson
+
+This document overviews the different scripts for the optimiser and how they should be used
+
+# ======= BlackBox.py ======= #
+
+
+# ======= var_dict.py ======= #
+
+Here you define the number of experimental variables that will be given to the optimsiser. All possible combinations of the dict can be created
+or a function can be created to create the var_dict based on the number of input variables.
+
+# ======= take_shot.py ======= #
+
+# ======= optimiser.py ======= #
+
+# ======= optimiser_funcs.py ======= #
+All of the differente functions and functionality from the code above have been rewritten as functions which can be called from anywhere iniside 
+this script
