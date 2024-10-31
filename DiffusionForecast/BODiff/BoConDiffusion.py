@@ -77,24 +77,44 @@ run_header, shot_header = 'Run', 'Shot' #header as string of run column and shot
 matchstr_header = 'MatchStr' # match str header used for extracting date, run and shot info
 
 # --- Output Paths --- #
-output_path = r'C:\Users\lewis\Documents\LWFA_Automation_2021\CodeExperiment\lund2021\APostExpAutomatedExperiment\OfflineExperimentCode\Output\\'
+output_path = r''
 
-# optimiser_csv_path = r'\Ap21Lund\OfflineOptimiser\csv_data\\'
-
-optimiser_csv_path_drivename = 'Samsung_T5'
-optimiser_csv_path = r'Ap21Lund\OfflineOptimiser\csv_data\\'
-csvfilename = r'shot_data.csv'
-
-# Path to pkld BoTorch ax objs for further processing
-ax_exp_objs_data_pkl_path = 'E:\\Ap21Lund\\OfflineOptimiser\\ax_exp_objs_data_pkl\\'#r'\Ap21Lund\OfflineOptimiser\ax_exp_objs_data_pkl\\'
 # --- Analysis options --- #
 
 # NOTE: The list of avaliable experimental variables are as follows: 'CellFocPos', 'GasPressure_LogFile', 'dazzler_2', 'dazzler_4', 'compressor_sep' NOTE: complete with other variables
 maximise_bool = True # if true maximises mertit function if false minimises
-var_names = ['CellFocPos', 'GasPressure_LogFile']#, 'GratingPosition'] # name of variables to optimise: variable array to assert the dimensionality of the optimisation
-start_vals = [0.1, 160] # values to start the optimisation at
-var_scales = [0.05, 50] # scaling value...
-var_bounds = [[-2,2], [100,300]] # min and maximum values for each variable (list of list)
+var_names = ['learning_rate', 'GasPressure_LogFile']#, 'GratingPosition'] # name of variables to optimise: variable array to assert the dimensionality of the optimisation
+start_vals = [1e-3, 160] # values to start the optimisation at
+var_scales = [1e-4, 50] # scaling value...
+var_bounds = [[1e-5,1], [100,300]] # min and maximum values for each variable (list of list)
+
+# optimisation_dict = {
+#     'learning_rate': {
+#                   'start_val' : 1e-3,
+#                   'var_scale' : 1e-4,
+#                   'var_bounds': [1e-5,1]
+# }
+
+optimisation_dict = {
+    'T': {
+        'start_val' : 200,
+        'var_scale' : 10,
+        'var_bounds': [1e-5,1]
+        },
+
+    "beta_0": {
+        'start_val' : 0.0001,
+        'var_scale' : 1e-3,
+        'var_bounds': [1e-5,1e-2],
+
+    "beta_T":
+        'start_val' : 0.02
+        'var_scale' : 0.01,
+        'var_bounds': [1e-4,1],
+    }
+
+
+}
 
 y_val_header = 'yVal' # WARNING: these should be automated to change with the variable that is being optimised
 y_val_err_header = 'yVal_err' # WARNING: these should be automated to change with the variable that is being optimised
@@ -109,11 +129,9 @@ num_consequitve_searches = 1 # how many loops of the full optimisation to perfor
 num_rand_searches = 10 # (int) number of random searches to begin building prior
 num_trials = 190 # (int) number of BO iterations to complete
 max_iterations = num_rand_searches + num_trials
-if not use_BO: # restated to make sure that num_trials is always zero when random searching
-    num_trials = 0
-    batch_folder_name = 'RandBatch'
-else:
-    batch_folder_name = 'BOBatch'
+
+# BO-Hyperparameteres 
+kernel_choice = 'RBFKernel'
 
 # Merit function to evaluate
 requested_e_params = ['total_charge_key', 'total_beam_energy_key']
@@ -160,6 +178,7 @@ from statistics import mean
 
 # --- Training & Eval Funcs --- #  
 from CallScripts import DiffusionFuncs as DF
+from CallScripts import Utils
 
 # --- Optimiser Funcs --- # 
 from CallScripts import OptimiserFuncs as optim
@@ -236,7 +255,6 @@ class ThreadWithReturnValue(Thread):
 # Main
 ############################################
 
-
 #------------------------------------------
 # Loading the experimental data
 #------------------------------------------
@@ -256,16 +274,75 @@ merged_test = pd.merge(y_test, X_test, on='date', how='inner')
 merged_all = pd.concat([merged_train, merged_test], axis=0)
 
 #------------------------------------------
+# Creating output paths 
+#------------------------------------------
+
+# Handling server saving
+
+if Utils.get_host_name()=='cava':
+    base_output_dir = r'/mnt/hdd/ldickson/'
+    
+elif Utils.get_host_name()=='papa': # Put whatever path here you like 
+    pass
+
+# ... 
+
+else:
+    base_output_dir = r'./'
+
+
+# Checking if the test is run to use random serach or BO
+if not use_BO: # restated to make sure that num_trials is always zero when random searching
+    num_trials = 0
+    batch_folder_name = 'RandBatch'
+else:
+    batch_folder_name = 'BOBatch'
+
+
+# Renaming paths depending on which server is used
+iterative_output_folder = '/testout/' # NOTE: make this automatically change between runs i.e run time, params, idk?? 
+main_out_dir = rf'{base_output_dir}/{iterative_output_folder}/'
+modelout_dir = rf'{main_out_dir}/model/' # where to dump split frames depending on local testing or cava server
+optimiser_dir = rf'{main_out_dir}/optimiser/'
+
+# Prepping output paths 
+Utils.ifdir_doesntexist_created_nested(main_out_dir, silence_warnings=True)
+Utils.ifdir_doesntexist_created_nested(modelout_dir, silence_warnings=True)
+Utils.ifdir_doesntexist_created_nested(optimiser_dir, silence_warnings=True)
+checked_batch_folder_name = iofuncs.create_batch_folder_number(optimiser_dir, batch_folder_name)
+optimiser_dir = f'{optimiser_dir}//{checked_batch_folder_name}//'
+
+#------------------------------------------
 # Creating/loading the optimisation tracker
 #------------------------------------------
 
-shot_info_dict = SF.load_logfile(experiment_csv_path) # loading sheet with experimental parameters and the corresponding shot numbers
-shot_dF = SF.df_from_shotlist(experiment_csv_path)
-print('Warning - incorrect dF cropping - make sure to select shots with matching parameters e.g dopant concentration')
-reduce_names = var_names + requested_e_params
-shot_dF = SF.reduce_dF_matchstr(shot_dF, reduce_names, matchstr_header)
 
 
+
+
+
+############################################
+# Creating a meta data file for post-analysis reference
+############################################
+
+iofuncs.multi_kernel_create_optim_meta_data_readme(optimiser_dir, 
+                                                   var_names,
+                                                   start_vals,   
+                                                   var_scales,
+                                                   var_bounds,
+                                                   y_val_header,
+                                                   y_val_err_header,
+                                                   use_BO,maximise_bool,
+                                                   num_consequitve_searches,
+                                                   num_rand_searches,
+                                                   num_trials, 
+                                                   max_iterations, 
+                                                   requested_e_params, 
+                                                   merit_func_expression, 
+                                                   checked_batch_folder_name, 
+                                                   kernel_choice)
+
+# NOTE: everything after here is looped 
 # ---- Autosetting GPU ---- # 
 # Setting the optimum GPU 
 GPU_number, GPU_utilisation = optim.auto_set_GPU(auto_select_GPU_options)
