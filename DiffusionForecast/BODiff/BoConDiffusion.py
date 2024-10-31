@@ -76,18 +76,6 @@ forecast_size_days = 7 # Days
 run_header, shot_header = 'Run', 'Shot' #header as string of run column and shot column
 matchstr_header = 'MatchStr' # match str header used for extracting date, run and shot info
 
-# --- Output Paths --- #
-output_path = r''
-
-# --- Analysis options --- #
-
-# NOTE: The list of avaliable experimental variables are as follows: 'CellFocPos', 'GasPressure_LogFile', 'dazzler_2', 'dazzler_4', 'compressor_sep' NOTE: complete with other variables
-maximise_bool = True # if true maximises mertit function if false minimises
-var_names = ['T', 'beta_0']#, 'GratingPosition'] # name of variables to optimise: variable array to assert the dimensionality of the optimisation
-start_vals = [1e-3, 160] # values to start the optimisation at
-var_scales = [1e-4, 50] # scaling value...
-var_bounds = [[1e-5,1], [100,300]] # min and maximum values for each variable (list of list)
-
 # optimisation_dict = {
 #     'learning_rate': {
 #                   'start_val' : 1e-3,
@@ -146,10 +134,10 @@ max_iterations = num_rand_searches + num_trials
 kernel_choice = 'RBFKernel'
 
 # Merit function to evaluate
+maximise_bool = False # if true maximises mertit function if false minimises
+fix these 
 requested_e_params = ['total_charge_key', 'total_beam_energy_key']
 merit_func_expression = 'total_charge_key*total_beam_energy_key'
-
-
 
 
 #===========================================
@@ -236,8 +224,6 @@ def load_data(data_set_str):
 
     return X_test, X_train, y_test, y_train
 
-
-
 def preprocess_dF(dF):
     """
     Add whatever pre-processing you need to do to the 
@@ -254,11 +240,12 @@ class ThreadWithReturnValue(Thread):
                  args=(), kwargs={}, Verbose=None):
         Thread.__init__(self, group, target, name, args, kwargs)
         self._return = None
+
     def run(self):
         print(type(self._target))
         if self._target is not None:
-            self._return = self._target(*self._args,
-                                                **self._kwargs)
+            self._return = self._target(*self._args, **self._kwargs)
+    
     def join(self, *args):
         Thread.join(self, *args)
         return self._return
@@ -317,6 +304,7 @@ main_out_dir = rf'{base_output_dir}/{iterative_output_folder}/'
 modelout_dir = rf'{main_out_dir}/model/' # where to dump split frames depending on local testing or cava server
 optimiser_dir = rf'{main_out_dir}/optimiser/'
 BOObj_pickle_dump_dir = rf'{main_out_dir}/BOObj_pickle_dump/' 
+config_dir = rf'{main_out_dir}/configs/'
 
 # Prepping output paths 
 BDUtils.ifdir_doesntexist_created_nested(main_out_dir, silence_warnings=True)
@@ -333,6 +321,19 @@ start_vals = [optimisation_dict[key]['start_val'] for key in var_names]
 var_scales = [optimisation_dict[key]['var_scale'] for key in var_names]
 var_bounds = [optimisation_dict[key]['var_bounds'] for key in var_names]
 
+#------------------------------------------
+# Loading default configs for non-optimised variables
+#------------------------------------------
+
+with open("DiffusionStuff/configs/conditionalForecastV2.json") as f:
+    data = f.read()
+
+default_config = json.loads(data)
+
+#------------------------------------------
+# Input training data prep
+#------------------------------------------
+
 # Extracting array of merged data from sample size and focast window with moving window
 sample_size = sample_size_days*24
 forecast_size = forecast_size_days*24
@@ -344,13 +345,13 @@ percent_idx = int(np.shape(merged_all_data)[0]*0.8) # 80%
 train = merged_all_data[:percent_idx]
 test = merged_all_data[percent_idx:]
 
-# ---- Begin config managment ---- # 
 scaler = StandardScaler().fit(train.reshape(-1, train.shape[-1]))
 train_scaled = scaler.transform(train.reshape(-1, train.shape[-1])).reshape(train.shape)
 test_scaled = scaler.transform(test.reshape(-1, test.shape[-1])).reshape(test.shape)
 
 print("train_scaled.shape", train_scaled.shape)
 print("test_scaled.shape", test_scaled.shape)
+
 
 ############################################
 # Beginning optimisation loop
@@ -438,11 +439,24 @@ while optim_completed_counter < num_consequitve_searches:
     while i < max_iterations:
         print(f'\n\nIteration: {i}\n\n')
 
+        ############################################
+        # Error checking and inter-thread timing
+        ############################################
 
-    with open("DiffusionStuff/configs/conditionalForecastV2.json") as f:
-        data = f.read()
+        # Checking if there has been an error in the GP fit
+        if error_event_obj.is_set():
+            break
 
-    config = json.loads(data)
+        # Wait for request parameters to be written
+        written_request_flag = written_request_event_obj.wait(timeout=None)
+        written_request_event_obj.clear() # reset flag to False
+        
+        # Checking if there has been an error in the GP fit
+        if error_event_obj.is_set():
+            break
+
+    # ---- Begin config managment ---- # 
+    
 
     # global train_config
     train_config = config["train_config"]  # training parameters

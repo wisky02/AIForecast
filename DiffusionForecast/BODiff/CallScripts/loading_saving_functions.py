@@ -1,6 +1,6 @@
 # Created on 24/09/2021 by Lewis Dickson
 
-# This script handles the saving functions for the electron data and for conversion of raw data into dictionaries etc
+# This script handles the saving functions for the optimisation data and for conversion of raw data into dictionaries etc
 
 #=============================================================================
 # Imports
@@ -92,7 +92,7 @@ def multikernel_created_optim_csv(csvfilename, csv_path, exp_vars, yVal_str, yVa
     # write_to.save() #close and output file
     return(full_path, headers)
 
-def create_optim_meta_data_readme(optimiser_csv_path,var_names,start_vals,   var_scales,var_bounds,y_val_header,y_val_err_header,use_BO,maximise_bool,num_consequitve_searches,num_rand_searches,num_trials, max_iterations, requested_e_params, merit_func_expression,batch_folder_name):
+def create_optim_meta_data_readme(optimiser_csv_path,var_names,start_vals,   var_scales,var_bounds,y_val_header,y_val_err_header,use_BO,maximise_bool,num_consequitve_searches,num_rand_searches,num_trials, max_iterations, requested_merit_params, merit_func_expression,batch_folder_name):
     with open(f'{optimiser_csv_path}//optimisation_settings.txt', "w") as dump_file:
         dump_file.writelines('#Dump file for optimiser settings\n\n')
         # Variable definition dump
@@ -111,12 +111,12 @@ def create_optim_meta_data_readme(optimiser_csv_path,var_names,start_vals,   var
         dump_file.writelines(f'num_rand_searches = {num_rand_searches} # (int) number of random searches to begin building prior\n')
         dump_file.writelines(f'num_trials = {num_trials} # (int) number of reruns to average over\n')
         dump_file.writelines(f'max_iterations = {max_iterations} # (int) number of reruns to average over\n')
-        dump_file.writelines(f'requested_e_params = {requested_e_params} # Loaded electron parameters for the merit function\n')
+        dump_file.writelines(f'requested_merit_params = {requested_merit_params} # Loaded parameters for the merit function\n')
         dump_file.writelines(f'merit_func_expression = {merit_func_expression} # Merit function definition evaluated with eval()\n\n')
         dump_file.writelines(f'Further Metadata\n')
         dump_file.writelines(f'batch_folder_name = {batch_folder_name} # Merit function definition evaluated with eval()\n')
 
-def multi_kernel_create_optim_meta_data_readme(optimiser_csv_path,var_names,start_vals,   var_scales,var_bounds,y_val_header,y_val_err_header,use_BO,maximise_bool,num_consequitve_searches, num_rand_searches, num_trials, max_iterations, requested_e_params, merit_func_expression, batch_folder_name, kernel_choice):
+def multi_kernel_create_optim_meta_data_readme(optimiser_csv_path,var_names,start_vals,   var_scales,var_bounds,y_val_header,y_val_err_header,use_BO,maximise_bool,num_consequitve_searches, num_rand_searches, num_trials, max_iterations, requested_merit_params, merit_func_expression, batch_folder_name, kernel_choice):
     # orig_dump_path =  f'{optimiser_csv_path}//optimisation_settings.txt'
     # if os.path.isfile(orig_dump_path):
     #
@@ -143,7 +143,7 @@ def multi_kernel_create_optim_meta_data_readme(optimiser_csv_path,var_names,star
         dump_file.writelines(f'num_rand_searches = {num_rand_searches} # (int) number of random searches to begin building prior\n')
         dump_file.writelines(f'num_trials = {num_trials} # (int) number of reruns to average over\n')
         dump_file.writelines(f'max_iterations = {max_iterations} # (int) number of reruns to average over\n')
-        dump_file.writelines(f'requested_e_params = {requested_e_params} # Loaded electron parameters for the merit function\n')
+        dump_file.writelines(f'requested_merit_params = {requested_merit_params} # Loaded parameters for the merit function\n')
         dump_file.writelines(f'merit_func_expression = {merit_func_expression} # Merit function definition evaluated with eval()\n\n')
         dump_file.writelines(f'Further Metadata\n')
         dump_file.writelines(f'batch_folder_name = {batch_folder_name} # Merit function definition evaluated with eval()\n')
