@@ -83,7 +83,7 @@ output_path = r''
 
 # NOTE: The list of avaliable experimental variables are as follows: 'CellFocPos', 'GasPressure_LogFile', 'dazzler_2', 'dazzler_4', 'compressor_sep' NOTE: complete with other variables
 maximise_bool = True # if true maximises mertit function if false minimises
-var_names = ['learning_rate', 'GasPressure_LogFile']#, 'GratingPosition'] # name of variables to optimise: variable array to assert the dimensionality of the optimisation
+var_names = ['T', 'beta_0']#, 'GratingPosition'] # name of variables to optimise: variable array to assert the dimensionality of the optimisation
 start_vals = [1e-3, 160] # values to start the optimisation at
 var_scales = [1e-4, 50] # scaling value...
 var_bounds = [[1e-5,1], [100,300]] # min and maximum values for each variable (list of list)
@@ -95,26 +95,38 @@ var_bounds = [[1e-5,1], [100,300]] # min and maximum values for each variable (l
 #                   'var_bounds': [1e-5,1]
 # }
 
+"""
+Add as many sub-dicts as parameters that you want to optimise
+optimisation_dict = {
+    '<parameter to optimise>': {
+        'start_val' : (float), # initial value to use for BO search
+        'var_scale' : (float), # typical scaling factor for search steps
+        'var_bounds': [(float), (float)] # hard lower and upport bounds for search
+        'continous' : (Bool) # if continous values can be used or need discreet
+    },
+}
+"""
+
 optimisation_dict = {
     'T': {
-        'start_val' : 200,
-        'var_scale' : 10,
-        'var_bounds': [1e-5,1]
-        },
+        'start_val' : 200, # initial value to use for BO search
+        'var_scale' : 10, # typical scaling factor for search steps
+        'var_bounds': [1e-5,1] # hard lower and upport bounds for search
+    },
 
     "beta_0": {
         'start_val' : 0.0001,
         'var_scale' : 1e-3,
         'var_bounds': [1e-5,1e-2],
-
-    "beta_T":
-        'start_val' : 0.02
+    },
+    
+    "beta_T": {
+        'start_val' : 0.02,
         'var_scale' : 0.01,
         'var_bounds': [1e-4,1],
     }
-
-
 }
+
 
 y_val_header = 'yVal' # WARNING: these should be automated to change with the variable that is being optimised
 y_val_err_header = 'yVal_err' # WARNING: these should be automated to change with the variable that is being optimised
@@ -300,7 +312,7 @@ else:
 
 
 # Renaming paths depending on which server is used
-iterative_output_folder = '/testout/' # NOTE: make this automatically change between runs i.e run time, params, idk?? 
+iterative_output_folder = '/BOcDiff/TestDIRName/' # NOTE: make this automatically change between runs i.e run time, params, idk?? 
 main_out_dir = rf'{base_output_dir}/{iterative_output_folder}/'
 modelout_dir = rf'{main_out_dir}/model/' # where to dump split frames depending on local testing or cava server
 optimiser_dir = rf'{main_out_dir}/optimiser/'
@@ -309,101 +321,115 @@ optimiser_dir = rf'{main_out_dir}/optimiser/'
 Utils.ifdir_doesntexist_created_nested(main_out_dir, silence_warnings=True)
 Utils.ifdir_doesntexist_created_nested(modelout_dir, silence_warnings=True)
 Utils.ifdir_doesntexist_created_nested(optimiser_dir, silence_warnings=True)
-checked_batch_folder_name = iofuncs.create_batch_folder_number(optimiser_dir, batch_folder_name)
-optimiser_dir = f'{optimiser_dir}//{checked_batch_folder_name}//'
 
 #------------------------------------------
 # Creating/loading the optimisation tracker
 #------------------------------------------
 
-
-
-
+# Explicitly extracting for ease of file name creation
+var_names = [*optimisation_dict]
+start_vals = [optimisation_dict[key]['start_val'] for key in var_names]
+var_scales = [optimisation_dict[key]['var_scale'] for key in var_names]
+var_bounds = [optimisation_dict[key]['var_bounds'] for key in var_names]
 
 
 ############################################
-# Creating a meta data file for post-analysis reference
+# Beginning optimisation loop
 ############################################
 
-iofuncs.multi_kernel_create_optim_meta_data_readme(optimiser_dir, 
-                                                   var_names,
-                                                   start_vals,   
-                                                   var_scales,
-                                                   var_bounds,
-                                                   y_val_header,
-                                                   y_val_err_header,
-                                                   use_BO,maximise_bool,
-                                                   num_consequitve_searches,
-                                                   num_rand_searches,
-                                                   num_trials, 
-                                                   max_iterations, 
-                                                   requested_e_params, 
-                                                   merit_func_expression, 
-                                                   checked_batch_folder_name, 
-                                                   kernel_choice)
-
+asdf
 # NOTE: everything after here is looped 
-# ---- Autosetting GPU ---- # 
-# Setting the optimum GPU 
-GPU_number, GPU_utilisation = optim.auto_set_GPU(auto_select_GPU_options)
-print(f'\nAutoset GPU: {GPU_number}')
-print(f'{GPU_number=}')
+optim_completed_counter = 0
+while optim_completed_counter < num_consequitve_searches:
 
-# Extracting array of merged data from sample size and focast window with moving window
-sample_size = sample_size_days*24
-forecast_size = forecast_size_days*24
-sample_size = sample_size+forecast_size
-merged_all_data = create_3d_array_rollingwindow(merged_all, sample_size, forecast_size)
+    #------------------------------------------------------
+    # Creating a meta data file for post-analysis reference
+    #------------------------------------------------------
 
-# Splitting all data into training, testing and validation 
-percent_idx = int(np.shape(merged_all_data)[0]*0.8) # 80%
-train = merged_all_data[:percent_idx]
-test = merged_all_data[percent_idx:]
+    # Counts the previous number of batches and creates a new folder with an iterative name
+    checked_batch_folder_name = iofuncs.create_batch_folder_number(optimiser_dir, batch_folder_name)
+    optimiser_dir_single_batch = f'{optimiser_dir}//{checked_batch_folder_name}//'
 
-# ---- Begin config managment ---- # 
-scaler = StandardScaler().fit(train.reshape(-1, train.shape[-1]))
-train_scaled = scaler.transform(train.reshape(-1, train.shape[-1])).reshape(train.shape)
-test_scaled = scaler.transform(test.reshape(-1, test.shape[-1])).reshape(test.shape)
+    # Creates the metadata for each optimisation run
+    iofuncs.multi_kernel_create_optim_meta_data_readme(optimiser_dir, 
+                                                    var_names,
+                                                    start_vals,   
+                                                    var_scales,
+                                                    var_bounds,
+                                                    y_val_header,
+                                                    y_val_err_header,
+                                                    use_BO,
+                                                    maximise_bool,
+                                                    num_consequitve_searches,
+                                                    num_rand_searches,
+                                                    num_trials, 
+                                                    max_iterations, 
+                                                    requested_e_params, 
+                                                    merit_func_expression, 
+                                                    checked_batch_folder_name, 
+                                                    kernel_choice)
 
-print("train_scaled.shape", train_scaled.shape)
-print("test_scaled.shape", test_scaled.shape)
+    # ---- Autosetting GPU ---- # 
+    # Setting the optimum GPU 
+    GPU_number, GPU_utilisation = optim.auto_set_GPU(auto_select_GPU_options)
+    print(f'\nAutoset GPU: {GPU_number}')
+    print(f'{GPU_number=}')
+
+    # Extracting array of merged data from sample size and focast window with moving window
+    sample_size = sample_size_days*24
+    forecast_size = forecast_size_days*24
+    sample_size = sample_size+forecast_size
+    merged_all_data = create_3d_array_rollingwindow(merged_all, sample_size, forecast_size)
+
+    # Splitting all data into training, testing and validation 
+    percent_idx = int(np.shape(merged_all_data)[0]*0.8) # 80%
+    train = merged_all_data[:percent_idx]
+    test = merged_all_data[percent_idx:]
+
+    # ---- Begin config managment ---- # 
+    scaler = StandardScaler().fit(train.reshape(-1, train.shape[-1]))
+    train_scaled = scaler.transform(train.reshape(-1, train.shape[-1])).reshape(train.shape)
+    test_scaled = scaler.transform(test.reshape(-1, test.shape[-1])).reshape(test.shape)
+
+    print("train_scaled.shape", train_scaled.shape)
+    print("test_scaled.shape", test_scaled.shape)
 
 
-with open("DiffusionStuff/configs/conditionalForecastV2.json") as f:
-    data = f.read()
+    with open("DiffusionStuff/configs/conditionalForecastV2.json") as f:
+        data = f.read()
 
-config = json.loads(data)
+    config = json.loads(data)
 
-# global train_config
-train_config = config["train_config"]  # training parameters
+    # global train_config
+    train_config = config["train_config"]  # training parameters
 
-gen_config = config['gen_config']
+    gen_config = config['gen_config']
 
-# global trainset_config
-trainset_config = config["trainset_config"]  # to load trainset
+    # global trainset_config
+    trainset_config = config["trainset_config"]  # to load trainset
 
-# global diffusion_config
-diffusion_config = config["diffusion_config"]  # basic hyperparameters
-print(diffusion_config)
+    # global diffusion_config
+    diffusion_config = config["diffusion_config"]  # basic hyperparameters
+    print(diffusion_config)
 
-# global diffusion_hyperparams
-diffusion_hyperparams = calc_diffusion_hyperparams(**diffusion_config)  # dictionary of all diffusion hyperparameters
+    # global diffusion_hyperparams
+    diffusion_hyperparams = calc_diffusion_hyperparams(**diffusion_config)  # dictionary of all diffusion hyperparameters
 
-# global model_config
-if train_config['use_model'] == 0:
-    model_config = config['wavenet_config']
-elif train_config['use_model'] == 1:
-    model_config = config['sashimi_config']
-elif train_config['use_model'] == 2:
-    model_config = config['wavenet_config'] 
+    # global model_config
+    if train_config['use_model'] == 0:
+        model_config = config['wavenet_config']
+    elif train_config['use_model'] == 1:
+        model_config = config['sashimi_config']
+    elif train_config['use_model'] == 2:
+        model_config = config['wavenet_config'] 
 
-print(model_config)
+    print(model_config)
 
-DF.training(**train_config, 
-            train_scaled = train_scaled,
-            gpu_number=GPU_number,
-            trainset_config = trainset_config,
-            diffusion_config=diffusion_config, 
-            diffusion_hyperparams= diffusion_hyperparams,
-            model_config = model_config
-            )
+    DF.training(**train_config, 
+                train_scaled = train_scaled,
+                gpu_number=GPU_number,
+                trainset_config = trainset_config,
+                diffusion_config=diffusion_config, 
+                diffusion_hyperparams= diffusion_hyperparams,
+                model_config = model_config
+                )
