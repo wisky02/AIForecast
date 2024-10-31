@@ -300,20 +300,6 @@ if not use_BO: # restated to make sure that num_trials is always zero when rando
 else:
     batch_folder_name = 'BOBatch'
 
-
-# Renaming paths depending on which server is used
-iterative_output_folder = '/BOcDiff/TestDIRName/' # NOTE: make this automatically change between runs i.e run time, params, idk?? 
-main_out_dir = rf'{base_output_dir}/{iterative_output_folder}/'
-modelout_dir = rf'{main_out_dir}/model/' # where to dump split frames depending on local testing or cava server
-optimiser_dir = rf'{main_out_dir}/optimiser/'
-BOObj_pickle_dump_dir = rf'{main_out_dir}/BOObj_pickle_dump/' 
-config_dir = rf'{main_out_dir}/configs/'
-
-# Prepping output paths 
-BDUtils.ifdir_doesntexist_created_nested(main_out_dir, silence_warnings=True)
-BDUtils.ifdir_doesntexist_created_nested(modelout_dir, silence_warnings=True)
-BDUtils.ifdir_doesntexist_created_nested(optimiser_dir, silence_warnings=True)
-
 #------------------------------------------
 # Creating/loading the optimisation tracker
 #------------------------------------------
@@ -361,9 +347,25 @@ print("test_scaled.shape", test_scaled.shape)
 ############################################
 
 # Counts the previous number of batches and creates a new folder with an iterative name
+
+Want to have everything inside the batch folder so that we can check the results by batches which group all of the params, results and model choices together 
+
+main_out_dir = rf'{base_output_dir}//BOcDiff/'
+optimiser_dir = rf'{main_out_dir}/optimiser/'
+BDUtils.ifdir_doesntexist_created_nested(optimiser_dir, silence_warnings=True)
 checked_batch_folder_name = iofuncs.create_batch_folder_number(optimiser_dir, batch_folder_name)
 optimiser_dir_single_batch = f'{optimiser_dir}//{checked_batch_folder_name}//'
+
+# Renaming paths depending on which server is used
+modelout_dir = rf'{optimiser_dir_single_batch}/model/' # where to dump split frames depending on local testing or cava server
+BOObj_pickle_dump_dir = rf'{optimiser_dir_single_batch}/BOObj_pickle_dump/' 
+config_dir = rf'{optimiser_dir_single_batch}/configs/'
+
+# Prepping output paths 
+BDUtils.ifdir_doesntexist_created_nested(main_out_dir, silence_warnings=True)
 BDUtils.ifdir_doesntexist_created_nested(optimiser_dir_single_batch, silence_warnings=True)
+BDUtils.ifdir_doesntexist_created_nested(modelout_dir, silence_warnings=True)
+
 
 # Create initial empty .csv for the optimiser, returns header list
 csvfilename = 'BO_optimsier.csv'
