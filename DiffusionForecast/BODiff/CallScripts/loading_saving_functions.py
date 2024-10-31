@@ -84,7 +84,7 @@ def multikernel_created_optim_csv(csvfilename, csv_path, exp_vars, yVal_str, yVa
         f_path = os.path.dirname(full_path)
         fname_split = fname.split('.')[0]
         extension = fname.split('.')[1]
-        csv_path = f'{f_path}//{fname_splitp}_{kernel_choice}.{extension}'
+        csv_path = f'{f_path}//{fname_split}_{kernel_choice}.{extension}'
         
     full_path = csv_path
     print(full_path)

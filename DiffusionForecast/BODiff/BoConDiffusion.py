@@ -173,6 +173,7 @@ import pytorch_lightning as L
 import pandas as pd
 import numpy as np
 import torch
+import threading
 import math
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
@@ -182,7 +183,6 @@ from DiffusionStuff.utils.util import find_max_epoch, print_size, sampling, calc
 from DiffusionStuff.utils.util import find_max_epoch, print_size, calc_diffusion_hyperparams, training_loss_replace
 from DiffusionStuff.utils.util import get_mask_bm_forecasting, create_3d_array_rollingwindow
 
-# sys.path.append('../')
 import json
 from DiffusionStuff.imputers.SSSDS4Imputer import SSSDS4Imputer
 from sklearn.metrics import mean_squared_error 
@@ -190,7 +190,7 @@ from statistics import mean
 
 # --- Training & Eval Funcs --- #  
 from CallScripts import DiffusionFuncs as DF
-from CallScripts import Utils
+from CallScripts import BDUtils
 
 # --- Optimiser Funcs --- # 
 from CallScripts import OptimiserFuncs as optim
@@ -291,10 +291,10 @@ merged_all = pd.concat([merged_train, merged_test], axis=0)
 
 # Handling server saving
 
-if Utils.get_host_name()=='cava':
+if BDUtils.get_host_name()=='cava':
     base_output_dir = r'/mnt/hdd/ldickson/'
     
-elif Utils.get_host_name()=='papa': # Put whatever path here you like 
+elif BDUtils.get_host_name()=='papa': # Put whatever path here you like 
     pass
 
 # ... 
@@ -316,11 +316,12 @@ iterative_output_folder = '/BOcDiff/TestDIRName/' # NOTE: make this automaticall
 main_out_dir = rf'{base_output_dir}/{iterative_output_folder}/'
 modelout_dir = rf'{main_out_dir}/model/' # where to dump split frames depending on local testing or cava server
 optimiser_dir = rf'{main_out_dir}/optimiser/'
+BOObj_pickle_dump_dir = rf'{main_out_dir}/BOObj_pickle_dump/' 
 
 # Prepping output paths 
-Utils.ifdir_doesntexist_created_nested(main_out_dir, silence_warnings=True)
-Utils.ifdir_doesntexist_created_nested(modelout_dir, silence_warnings=True)
-Utils.ifdir_doesntexist_created_nested(optimiser_dir, silence_warnings=True)
+BDUtils.ifdir_doesntexist_created_nested(main_out_dir, silence_warnings=True)
+BDUtils.ifdir_doesntexist_created_nested(modelout_dir, silence_warnings=True)
+BDUtils.ifdir_doesntexist_created_nested(optimiser_dir, silence_warnings=True)
 
 #------------------------------------------
 # Creating/loading the optimisation tracker
@@ -332,12 +333,58 @@ start_vals = [optimisation_dict[key]['start_val'] for key in var_names]
 var_scales = [optimisation_dict[key]['var_scale'] for key in var_names]
 var_bounds = [optimisation_dict[key]['var_bounds'] for key in var_names]
 
+# Extracting array of merged data from sample size and focast window with moving window
+sample_size = sample_size_days*24
+forecast_size = forecast_size_days*24
+sample_size = sample_size+forecast_size
+merged_all_data = create_3d_array_rollingwindow(merged_all, sample_size, forecast_size)
+
+# Splitting all data into training, testing and validation 
+percent_idx = int(np.shape(merged_all_data)[0]*0.8) # 80%
+train = merged_all_data[:percent_idx]
+test = merged_all_data[percent_idx:]
+
+# ---- Begin config managment ---- # 
+scaler = StandardScaler().fit(train.reshape(-1, train.shape[-1]))
+train_scaled = scaler.transform(train.reshape(-1, train.shape[-1])).reshape(train.shape)
+test_scaled = scaler.transform(test.reshape(-1, test.shape[-1])).reshape(test.shape)
+
+print("train_scaled.shape", train_scaled.shape)
+print("test_scaled.shape", test_scaled.shape)
 
 ############################################
 # Beginning optimisation loop
 ############################################
 
-asdf
+# Counts the previous number of batches and creates a new folder with an iterative name
+checked_batch_folder_name = iofuncs.create_batch_folder_number(optimiser_dir, batch_folder_name)
+optimiser_dir_single_batch = f'{optimiser_dir}//{checked_batch_folder_name}//'
+BDUtils.ifdir_doesntexist_created_nested(optimiser_dir_single_batch, silence_warnings=True)
+
+# Create initial empty .csv for the optimiser, returns header list
+csvfilename = 'BO_optimsier.csv'
+full_optimiser_csv_path, headers = iofuncs.multikernel_created_optim_csv(csvfilename, optimiser_dir_single_batch, var_names, y_val_header, y_val_err_header, matchstr_header, kernel_choice)
+print(f'optimiser_csv_path = {full_optimiser_csv_path}')
+
+# Creates the metadata for each optimisation run
+iofuncs.multi_kernel_create_optim_meta_data_readme(optimiser_dir, 
+                                                var_names,
+                                                start_vals,   
+                                                var_scales,
+                                                var_bounds,
+                                                y_val_header,
+                                                y_val_err_header,
+                                                use_BO,
+                                                maximise_bool,
+                                                num_consequitve_searches,
+                                                num_rand_searches,
+                                                num_trials, 
+                                                max_iterations, 
+                                                requested_e_params, 
+                                                merit_func_expression, 
+                                                checked_batch_folder_name, 
+                                                kernel_choice)
+
 # NOTE: everything after here is looped 
 optim_completed_counter = 0
 while optim_completed_counter < num_consequitve_searches:
@@ -346,28 +393,36 @@ while optim_completed_counter < num_consequitve_searches:
     # Creating a meta data file for post-analysis reference
     #------------------------------------------------------
 
-    # Counts the previous number of batches and creates a new folder with an iterative name
-    checked_batch_folder_name = iofuncs.create_batch_folder_number(optimiser_dir, batch_folder_name)
-    optimiser_dir_single_batch = f'{optimiser_dir}//{checked_batch_folder_name}//'
+    # Creating a dictionary to hold the variable data
+    var_dict, NDIMS = optimiser_funcs.create_var_dict(var_names, start_vals, var_scales, var_bounds)
 
-    # Creates the metadata for each optimisation run
-    iofuncs.multi_kernel_create_optim_meta_data_readme(optimiser_dir, 
-                                                    var_names,
-                                                    start_vals,   
-                                                    var_scales,
-                                                    var_bounds,
-                                                    y_val_header,
-                                                    y_val_err_header,
-                                                    use_BO,
-                                                    maximise_bool,
-                                                    num_consequitve_searches,
-                                                    num_rand_searches,
-                                                    num_trials, 
-                                                    max_iterations, 
-                                                    requested_e_params, 
-                                                    merit_func_expression, 
-                                                    checked_batch_folder_name, 
-                                                    kernel_choice)
+    # Creating event object for threads
+    returned_merit_event_obj = threading.Event()
+    written_request_event_obj = threading.Event()
+    error_event_obj = threading.Event() # case where GP fit fails and we need to abandon and move onto next loop
+
+    returned_merit_event_obj.clear() # Setting event to False
+    written_request_event_obj.clear() # Setting event to False
+    error_event_obj.clear() # Setting event to False
+
+    # Creating thread to run optimiser script indefinetly
+    optimiser_thread = ThreadWithReturnValue(
+        target = MultiKernelAxOfflineBoTo.run_optimiser, 
+            args = (
+                var_dict, 
+                num_rand_searches, 
+                num_trials, 
+                full_optimiser_csv_path, 
+                headers, 
+                maximise_bool, 
+                returned_merit_event_obj,
+                written_request_event_obj,
+                error_event_obj, 
+                BOObj_pickle_dump_dir, 
+                kernel_choice,)
+        )
+    optimiser_thread.start() # Starting child thread
+
 
     # ---- Autosetting GPU ---- # 
     # Setting the optimum GPU 
@@ -375,24 +430,13 @@ while optim_completed_counter < num_consequitve_searches:
     print(f'\nAutoset GPU: {GPU_number}')
     print(f'{GPU_number=}')
 
-    # Extracting array of merged data from sample size and focast window with moving window
-    sample_size = sample_size_days*24
-    forecast_size = forecast_size_days*24
-    sample_size = sample_size+forecast_size
-    merged_all_data = create_3d_array_rollingwindow(merged_all, sample_size, forecast_size)
+    ############################################
+    # Finding the requested data from the optimiser code
+    ############################################
+    i = 0
 
-    # Splitting all data into training, testing and validation 
-    percent_idx = int(np.shape(merged_all_data)[0]*0.8) # 80%
-    train = merged_all_data[:percent_idx]
-    test = merged_all_data[percent_idx:]
-
-    # ---- Begin config managment ---- # 
-    scaler = StandardScaler().fit(train.reshape(-1, train.shape[-1]))
-    train_scaled = scaler.transform(train.reshape(-1, train.shape[-1])).reshape(train.shape)
-    test_scaled = scaler.transform(test.reshape(-1, test.shape[-1])).reshape(test.shape)
-
-    print("train_scaled.shape", train_scaled.shape)
-    print("test_scaled.shape", test_scaled.shape)
+    while i < max_iterations:
+        print(f'\n\nIteration: {i}\n\n')
 
 
     with open("DiffusionStuff/configs/conditionalForecastV2.json") as f:
