@@ -13,6 +13,7 @@ import os
 import time
 from PIL import Image
 import matplotlib.pyplot as plt
+import json
 
 #=============================================================================
 # Saving Functions
@@ -228,3 +229,7 @@ def find_file_creation_time(fpath):
 def extract_data_time(ppath):
     file_time = find_file_creation_time(ppath)
     return(file_time)
+
+def dump_json(out_file, out_path):
+    with open("sample.json", "w") as outfile:
+        json.dump(out_file, outfile)

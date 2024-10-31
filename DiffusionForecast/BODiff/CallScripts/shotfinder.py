@@ -104,7 +104,7 @@ def load_demanded_vars(an_optimser_csv_path):
     dF_lastline = dF_optim.iloc[-1:]
     raw_dF_dict = dF_lastline.to_dict() #produces dict of dict with seperate keys for each row and the top level key for the header name
     requested_dict = last_dict_of_dict_val(raw_dF_dict)
-    return(requested_dict,dF_optim)
+    return(requested_dict, dF_optim)
 
 # This function finds the closest value in terms of percentage difference between all the requested variables and the avaliable data. This is done since the scaling on the variables can be very different (i.e jetx and compressor seperation)
 def find_closest_values():

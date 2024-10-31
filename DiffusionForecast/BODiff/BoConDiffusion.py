@@ -53,10 +53,7 @@ data_set_str = "1"
     "3 - Resilient Fields"
 """
 
-# dataset = "2 - Clean Urban Air"
-# dataset = "3 - Resilient Fields"
-
-# Use get_least_utilized_gpu or get_least_memory_utilized_gpu to auto launch on the optimum GPU, if auto_select = False, default_GPU is set
+default_config_path = r'./DiffusionStuff/configs/conditionalForecastV2.json'
 
 # --- Analysis Options --- #
 auto_select_GPU_options = {'auto_select': True, # if True finds least utilised GPU in terms of utilisation or memory
@@ -64,7 +61,6 @@ auto_select_GPU_options = {'auto_select': True, # if True finds least utilised G
                            'default_GPU':3,
                            'avoid_GPU':0 # [int] static option to avoid certain GPUs - -1 for no avoids 
                            }
-
 
 # Setting Sample size for forecasting
 sample_size_days = 21 # Days
@@ -76,12 +72,6 @@ forecast_size_days = 7 # Days
 run_header, shot_header = 'Run', 'Shot' #header as string of run column and shot column
 matchstr_header = 'MatchStr' # match str header used for extracting date, run and shot info
 
-# optimisation_dict = {
-#     'learning_rate': {
-#                   'start_val' : 1e-3,
-#                   'var_scale' : 1e-4,
-#                   'var_bounds': [1e-5,1]
-# }
 
 """
 Add as many sub-dicts as parameters that you want to optimise
@@ -134,8 +124,8 @@ use_BO = True # If True runs bayesian optimisation otherwise runs random search 
 num_consequitve_searches = 1 # how many loops of the full optimisation to perform for statistics
 
 # Intra-optimisation options
-num_rand_searches = 10 # (int) number of random searches to begin building prior
-num_trials = 190 # (int) number of BO iterations to complete
+num_rand_searches = 3 # (int) number of random searches to begin building prior
+num_trials = 10 # (int) number of BO iterations to complete
 max_iterations = num_rand_searches + num_trials
 
 # BO-Hyperparameteres 
@@ -257,6 +247,12 @@ class ThreadWithReturnValue(Thread):
         Thread.join(self, *args)
         return self._return
 
+def only_update_params(optimisation_dict, demand_dict):
+    out_dict = {}
+    for optim_key in [*optimisation_dict]:
+        out_dict[optim_key] = demand_dict[optim_key]
+    return out_dict
+
 ############################################
 # Main
 ############################################
@@ -332,7 +328,7 @@ var_bounds = [optimisation_dict[key]['var_bounds'] for key in var_names]
 # Loading default configs for non-optimised variables
 #------------------------------------------
 
-with open("DiffusionStuff/configs/conditionalForecastV2.json") as f:
+with open(default_config_path) as f:
     data = f.read()
 
 default_config = json.loads(data)
@@ -375,7 +371,7 @@ full_optimiser_csv_path, headers = iofuncs.multikernel_created_optim_csv(csvfile
 print(f'optimiser_csv_path = {full_optimiser_csv_path}')
 
 # Creates the metadata for each optimisation run
-iofuncs.multi_kernel_create_optim_meta_data_readme(optimiser_dir, 
+iofuncs.multi_kernel_create_optim_meta_data_readme(optimiser_dir_single_batch, 
                                                 var_names,
                                                 start_vals,   
                                                 var_scales,
@@ -470,7 +466,11 @@ while optim_completed_counter < num_consequitve_searches:
         # NOTE: Here we use the shotfinder function which reads in previous experimental parmeters from an .xlsx or .csv (filetype check in loading functions) and finds = shot_dFhots closest to the requested paramters
         print(f'full_optimiser_csv_path = {full_optimiser_csv_path}')
         demand_dict, dF_optim = SF.load_demanded_vars(full_optimiser_csv_path)
-        print(demand_dict)
+
+        # Reduce demand dict to only update commands 
+        optimser_requested_param_update_dict = only_update_params(optimisation_dict, demand_dict)
+        print(f'{optimser_requested_param_update_dict=}')
+
         # selected_matchstr = SF.find_matching_shot(shot_info_dict, demand_dict, var_names, matchstr_header)
 
         # print(f'Selected Shot: {selected_matchstr}')
@@ -478,15 +478,12 @@ while optim_completed_counter < num_consequitve_searches:
         # ---- Begin config managment and modification ---- # 
 
         # Saved modified config to latest batch number
-
-        print(fr'{default_config["diffusion_config"]=}')
-        modified_config = DiffusionFuncs.modify_config(default_config, demand_dict)
-        print('\n\n\n\n')
-        print(fr'{modified_config["diffusion_config"]=}')
-
-        print(modified_config)
-        asdf
+        modified_config = DiffusionFuncs.modify_config(default_config, optimser_requested_param_update_dict)
         
+        # Dump modified config for later loading
+        # updated_config_path = 
+        iofuncs.dump_json(modified_config, updated_config_path)
+
         # global train_config
         train_config = modified_config["train_config"]  # training parameters
 
