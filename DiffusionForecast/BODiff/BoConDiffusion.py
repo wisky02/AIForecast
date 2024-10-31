@@ -110,7 +110,7 @@ optimisation_dict = {
     
     "beta_T": {
         'start_val' : 0.02,
-        'var_scale' : 0.01,
+        'var_scale' : 1e-2,
         'var_bounds': [1e-4,1],
     }
 }
@@ -120,9 +120,17 @@ y_val_header = 'yVal' # WARNING: these should be automated to change with the va
 y_val_err_header = 'yVal_err' # WARNING: these should be automated to change with the variable that is being optimised
 
 ## -----  Global Optimisation search options ----- ##
-kernel_choice_list = ['MaternKernel_1_over_2','MaternKernel_3_over_2','MaternKernel_5_over_2', 'RBFKernel', 'LinearKernel', 'RQKernel'] # note for MeternKernel the number is the smoothness parameter: https://docs.gpytorch.ai/en/stable/kernels.html#maternkernel
+# Each of these have been written and can be chosen with kernel_choice
+kernel_choice_list = ['MaternKernel_1_over_2', 
+                      'MaternKernel_3_over_2',
+                      'MaternKernel_5_over_2', 
+                      'RBFKernel', 
+                      'LinearKernel', 
+                      'RQKernel'] # note for MeternKernel the number is the smoothness parameter: https://docs.gpytorch.ai/en/stable/kernels.html#maternkernel
+
+kernel_choice = 'RBFKernel'
+
 use_BO = True # If True runs bayesian optimisation otherwise runs random search - if false will only complete <num_rand_searches> searches
-# print('WARNING MAKE SURE TO CHANGE AFTER TESTING')
 num_consequitve_searches = 1 # how many loops of the full optimisation to perform for statistics
 
 # Intra-optimisation options
@@ -135,9 +143,8 @@ kernel_choice = 'RBFKernel'
 
 # Merit function to evaluate
 maximise_bool = False # if true maximises mertit function if false minimises
-fix these 
-requested_e_params = ['total_charge_key', 'total_beam_energy_key']
-merit_func_expression = 'total_charge_key*total_beam_energy_key'
+requested_meritfunc_params = ['RMSE'] # Can load multiple variables from the outputs if you need to calculate a more complicated merit function
+merit_func_expression = 'RMSE' # this could be more complicated like "(max_val-n_iterations)/min_val" just make sure to use the same names as the headers from the output file where these values are saved
 
 
 #===========================================
@@ -177,7 +184,7 @@ from sklearn.metrics import mean_squared_error
 from statistics import mean
 
 # --- Training & Eval Funcs --- #  
-from CallScripts import DiffusionFuncs as DF
+from CallScripts import DiffusionFuncs
 from CallScripts import BDUtils
 
 # --- Optimiser Funcs --- # 
@@ -381,7 +388,7 @@ iofuncs.multi_kernel_create_optim_meta_data_readme(optimiser_dir,
                                                 num_rand_searches,
                                                 num_trials, 
                                                 max_iterations, 
-                                                requested_e_params, 
+                                                requested_meritfunc_params, 
                                                 merit_func_expression, 
                                                 checked_batch_folder_name, 
                                                 kernel_choice)
@@ -455,39 +462,58 @@ while optim_completed_counter < num_consequitve_searches:
         if error_event_obj.is_set():
             break
 
-    # ---- Begin config managment ---- # 
-    
 
-    # global train_config
-    train_config = config["train_config"]  # training parameters
+        ############################################
+        # Finding matching shots from experimental data
+        ############################################
 
-    gen_config = config['gen_config']
+        # NOTE: Here we use the shotfinder function which reads in previous experimental parmeters from an .xlsx or .csv (filetype check in loading functions) and finds = shot_dFhots closest to the requested paramters
+        print(f'full_optimiser_csv_path = {full_optimiser_csv_path}')
+        demand_dict, dF_optim = SF.load_demanded_vars(full_optimiser_csv_path)
+        print(demand_dict)
+        # selected_matchstr = SF.find_matching_shot(shot_info_dict, demand_dict, var_names, matchstr_header)
 
-    # global trainset_config
-    trainset_config = config["trainset_config"]  # to load trainset
+        # print(f'Selected Shot: {selected_matchstr}')
 
-    # global diffusion_config
-    diffusion_config = config["diffusion_config"]  # basic hyperparameters
-    print(diffusion_config)
+        # ---- Begin config managment and modification ---- # 
 
-    # global diffusion_hyperparams
-    diffusion_hyperparams = calc_diffusion_hyperparams(**diffusion_config)  # dictionary of all diffusion hyperparameters
+        # Saved modified config to latest batch number
 
-    # global model_config
-    if train_config['use_model'] == 0:
-        model_config = config['wavenet_config']
-    elif train_config['use_model'] == 1:
-        model_config = config['sashimi_config']
-    elif train_config['use_model'] == 2:
-        model_config = config['wavenet_config'] 
+        print(fr'{default_config["diffusion_config"]=}')
+        modified_config = DiffusionFuncs.modify_config(default_config, demand_dict)
+        print('\n\n\n\n')
+        print(fr'{modified_config["diffusion_config"]=}')
 
-    print(model_config)
+        print(modified_config)
+        asdf
+        
+        # global train_config
+        train_config = modified_config["train_config"]  # training parameters
 
-    DF.training(**train_config, 
-                train_scaled = train_scaled,
-                gpu_number=GPU_number,
-                trainset_config = trainset_config,
-                diffusion_config=diffusion_config, 
-                diffusion_hyperparams= diffusion_hyperparams,
-                model_config = model_config
-                )
+        gen_config = modified_config['gen_config']
+
+        # global trainset_config
+        trainset_config = modified_config["trainset_config"]  # to load trainset
+
+        # global diffusion_config
+        diffusion_config = modified_config["diffusion_config"]  # basic hyperparameters
+
+        # global diffusion_hyperparams
+        diffusion_hyperparams = calc_diffusion_hyperparams(**diffusion_config)  # dictionary of all diffusion hyperparameters
+
+        # global model_config
+        if train_config['use_model'] == 0:
+            model_config = modified_config['wavenet_config']
+        elif train_config['use_model'] == 1:
+            model_config = modified_config['sashimi_config']
+        elif train_config['use_model'] == 2:
+            model_config = modified_config['wavenet_config'] 
+
+        DiffusionFuncs.training(**train_config, 
+                    train_scaled = train_scaled,
+                    gpu_number=GPU_number,
+                    trainset_config = trainset_config,
+                    diffusion_config=diffusion_config, 
+                    diffusion_hyperparams= diffusion_hyperparams,
+                    model_config = model_config
+                    )

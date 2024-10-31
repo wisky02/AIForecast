@@ -9,6 +9,26 @@ from sklearn.metrics import mean_squared_error
 import numpy as np 
 
 
+def modify_config(config, update_dict):
+    for sub_key, new_value in update_dict.items():
+        found = None
+
+        # Search for the sub_key across all sub-dictionaries
+        for main_key, subdict in config.items():
+            if sub_key in subdict:
+                if found is not None:  # Duplicate subkey found
+                    raise KeyError(f"Duplicate subkey '{sub_key}' found in both '{found}' and '{main_key}'")
+                found = main_key
+
+        if found is None:
+            raise KeyError(f"Subkey '{sub_key}' not found in any configuration section.")
+        
+        # Update the found sub_key with new_value
+        config[found][sub_key] = new_value
+
+    return config
+
+
 def generate(output_directory,
             num_samples,
             ckpt_path,
